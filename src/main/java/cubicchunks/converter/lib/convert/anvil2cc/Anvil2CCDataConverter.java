@@ -54,8 +54,11 @@ public class Anvil2CCDataConverter implements ChunkDataConverter<AnvilChunkData,
 
     public CubicChunksColumnData convert(AnvilChunkData input) {
         try {
-            Map<Integer, ByteBuffer> cubes = extractCubeData(input.getData());
-            ByteBuffer column = extractColumnData(input.getData());
+            ByteArrayInputStream in = new ByteArrayInputStream(input.getData().array());
+            CompoundTag tag = Utils.readCompressed(in);
+
+            Map<Integer, ByteBuffer> cubes = extractCubeData(tag);
+            ByteBuffer column = extractColumnData(tag);
             EntryLocation2D location = new EntryLocation2D(input.getPosition().getEntryX(), input.getPosition().getEntryZ());
             return new CubicChunksColumnData(input.getDimension(), location, column, cubes);
         } catch (IOException impossible) {
@@ -63,15 +66,7 @@ public class Anvil2CCDataConverter implements ChunkDataConverter<AnvilChunkData,
         }
     }
 
-
-    private ByteBuffer extractColumnData(ByteBuffer vanillaData) throws IOException {
-        ByteArrayInputStream in = new ByteArrayInputStream(vanillaData.array());
-        CompoundTag tag = Utils.readCompressed(in);
-        CompoundTag columnTag = extractColumnData(tag);
-        return Utils.writeCompressed(columnTag, false);
-    }
-
-    private CompoundTag extractColumnData(CompoundTag tag) throws IOException {
+    private ByteBuffer extractColumnData(CompoundTag tag) throws IOException {
         /*
          *
          * Vanilla Chunk NBT structure:
@@ -130,7 +125,7 @@ public class Anvil2CCDataConverter implements ChunkDataConverter<AnvilChunkData,
             rootMap.put(tag.getValue().get("DataVersion"));
         }
 
-        return new CompoundTag("", rootMap);
+        return Utils.writeCompressed(new  CompoundTag("", rootMap), false);
     }
 
     private int[] fixHeightmap(int[] heights) {
@@ -154,18 +149,8 @@ public class Anvil2CCDataConverter implements ChunkDataConverter<AnvilChunkData,
         return buf.toByteArray();
     }
 
-    private Map<Integer, ByteBuffer> extractCubeData(ByteBuffer vanillaData) throws IOException {
-        ByteArrayInputStream in = new ByteArrayInputStream(vanillaData.array());
-        Map<Integer, CompoundTag> tags = extractCubeData(Utils.readCompressed(in));
-        Map<Integer, ByteBuffer> bytes = new HashMap<>();
-        for (Integer y : tags.keySet()) {
-            bytes.put(y, Utils.writeCompressed(tags.get(y), false));
-        }
-        return bytes;
-    }
-
     @SuppressWarnings("unchecked")
-    private Map<Integer, CompoundTag> extractCubeData(CompoundTag srcRootTag) {
+    private Map<Integer, ByteBuffer> extractCubeData(CompoundTag srcRootTag) throws IOException {
         /*
          *
          * Vanilla Chunk NBT structure:
@@ -270,7 +255,12 @@ public class Anvil2CCDataConverter implements ChunkDataConverter<AnvilChunkData,
                 tags.put(y, emptyCube(x, y, z));
             }
         }
-        return tags;
+
+        Map<Integer, ByteBuffer> bytes = new HashMap<>();
+        for (Integer y : tags.keySet()) {
+            bytes.put(y, Utils.writeCompressed(tags.get(y), false));
+        }
+        return bytes;
     }
 
     private CompoundTag emptyCube(int x, int y, int z) {
